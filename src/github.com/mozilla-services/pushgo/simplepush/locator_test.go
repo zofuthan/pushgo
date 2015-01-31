@@ -246,11 +246,18 @@ func TestLocatorReadyNotify(t *testing.T) {
 		t.Error("Should route to connected client")
 	}
 
-	mckLocator.EXPECT().Close().Times(2)
+	gomock.InOrder(
+		mckLocator.EXPECT().Close(),
+		recvStat.EXPECT().Close(),
+	)
 	if err := recvApp.Close(); err != nil {
 		t.Errorf("Error closing peer: %s", err)
 	}
 	wg.Wait()
+	gomock.InOrder(
+		mckLocator.EXPECT().Close(),
+		sndStat.EXPECT().Close(),
+	)
 	if err := sndApp.Close(); err != nil {
 		t.Errorf("Error closing self: %s", err)
 	}
