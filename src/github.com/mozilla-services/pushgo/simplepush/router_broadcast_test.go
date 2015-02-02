@@ -58,8 +58,10 @@ func TestBroadcastRouter(t *testing.T) {
 	mckLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	go router.Start(errChan)
 
-	mckStat.EXPECT().Increment("router.socket.connect").AnyTimes()
-	mckStat.EXPECT().Increment("router.socket.disconnect").AnyTimes()
+	mckStat.EXPECT().IncrementByRate(
+		"router.socket.connect", int64(1), float32(0.1)).AnyTimes()
+	mckStat.EXPECT().IncrementByRate(
+		"router.socket.disconnect", int64(1), float32(0.1)).AnyTimes()
 
 	Convey("Should fail to route a non-existent uaid", t, func() {
 
@@ -67,10 +69,17 @@ func TestBroadcastRouter(t *testing.T) {
 		mckLogger.EXPECT().ShouldLog(gomock.Any()).Return(true).Times(2)
 		mckLogger.EXPECT().Log(gomock.Any(), gomock.Any(),
 			gomock.Any(), gomock.Any()).Times(2)
-		mckStat.EXPECT().Increment("router.dial.success").AnyTimes()
+		mckStat.EXPECT().IncrementByRate(
+			"router.dial.success", int64(1), float32(0.1)).AnyTimes()
 		mckStat.EXPECT().Increment("router.dial.error").AnyTimes()
-		mckStat.EXPECT().Increment("router.broadcast.miss").Times(1)
-		mckStat.EXPECT().Timer(gomock.Any(), gomock.Any()).Times(2)
+		gomock.InOrder(
+			mckStat.EXPECT().IncrementByRate(
+				"router.broadcast.miss", int64(1), float32(0.1)),
+			mckStat.EXPECT().TimerRate(
+				"updates.routed.misses", gomock.Any(), float32(0.1)),
+			mckStat.EXPECT().TimerRate(
+				"router.handled", gomock.Any(), float32(0.1)),
+		)
 		delivered, err := router.Route(cancelSignal, uaid, chid, version, sentAt,
 			"", "")
 		So(err, ShouldBeNil)
@@ -100,18 +109,25 @@ func TestBroadcastRouter(t *testing.T) {
 		thisNodeList := []string{thisNode}
 
 		mckLocator.EXPECT().Contacts(gomock.Any()).Return(thisNodeList, nil)
-		mckStat.EXPECT().Increment("updates.routed.incoming")
+		mckStat.EXPECT().IncrementByRate(
+			"updates.routed.incoming", int64(1), float32(0.1))
 		mckLogger.EXPECT().ShouldLog(gomock.Any()).Return(true).AnyTimes()
 		mckLogger.EXPECT().Log(gomock.Any(), gomock.Any(), gomock.Any(),
 			gomock.Any()).AnyTimes()
 		mockWorker.EXPECT().Send(chid, version, "").Return(nil)
 		mckStat.EXPECT().Gauge("update.client.connections", gomock.Any()).AnyTimes()
-		mckStat.EXPECT().Increment("updates.routed.received")
-		mckStat.EXPECT().Increment("router.dial.success").AnyTimes()
+		mckStat.EXPECT().IncrementByRate(
+			"updates.routed.received", int64(1), float32(0.1))
+		mckStat.EXPECT().IncrementByRate(
+			"router.dial.success", int64(1), float32(0.1)).AnyTimes()
 		mckStat.EXPECT().Increment("router.dial.error").AnyTimes()
-		mckStat.EXPECT().Increment("router.broadcast.hit")
-		mckStat.EXPECT().Timer("updates.routed.hits", gomock.Any())
-		mckStat.EXPECT().Timer("router.handled", gomock.Any())
+		gomock.InOrder(
+			mckStat.EXPECT().IncrementByRate(
+				"router.broadcast.hit", int64(1), float32(0.1)),
+			mckStat.EXPECT().TimerRate(
+				"updates.routed.hits", gomock.Any(), float32(0.1)),
+			mckStat.EXPECT().TimerRate("router.handled", gomock.Any(), float32(0.1)),
+		)
 
 		delivered, err := router.Route(cancelSignal, uaid, chid, version, sentAt,
 			"", "")
