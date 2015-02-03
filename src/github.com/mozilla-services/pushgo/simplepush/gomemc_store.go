@@ -238,7 +238,7 @@ func (s *GomemcStore) storeRegister(uaid, chid string, version int64) error {
 	}
 	if version != 0 {
 		rec.State = StateLive
-		rec.Version = uint64(version)
+		rec.Version = version
 	}
 	if err = s.storeRec(key, rec); err != nil {
 		return err
@@ -285,7 +285,7 @@ func (s *GomemcStore) storeUpdate(uaid, chid string, version int64) error {
 		if cRec.State != StateDeleted {
 			newRecord := &ChannelRecord{
 				State:       StateLive,
-				Version:     uint64(version),
+				Version:     version,
 				LastTouched: time.Now().UTC().Unix(),
 			}
 			return s.storeRec(key, newRecord)
@@ -457,7 +457,7 @@ func (s *GomemcStore) FetchAll(uaid string, since time.Time) ([]Update, []string
 		case StateLive:
 			version := channel.Version
 			if version == 0 {
-				version = uint64(time.Now().UTC().Unix())
+				version = time.Now().UTC().Unix()
 				if s.logger.ShouldLog(DEBUG) {
 					s.logger.Debug("gomemc", "FetchAll Using Timestamp", LogFields{
 						"uaid": uaid,

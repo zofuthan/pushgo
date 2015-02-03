@@ -186,8 +186,16 @@ func TestWorkerFlush(t *testing.T) {
 			wws.SetUAID(uaid)
 
 			updates := []Update{
-				{"263d09f8950b11e4a1f83c15c2c622fe", 2, "I'm a little teapot"},
-				{"bac9d83a950b11e4bd713c15c2c622fe", 4, "Short and stout"},
+				{
+					ChannelID: "263d09f8950b11e4a1f83c15c2c622fe",
+					Version:   2,
+					Data:      "I'm a little teapot",
+				},
+				{
+					ChannelID: "bac9d83a950b11e4bd713c15c2c622fe",
+					Version:   4,
+					Data:      "Short and stout",
+				},
 			}
 			expired := []string{"c778e94a950b11e4ba7f3c15c2c622fe"}
 
@@ -265,7 +273,7 @@ func TestWorkerSend(t *testing.T) {
 			gomock.InOrder(
 				mckSocket.EXPECT().WriteJSON(FlushReply{
 					Type:    "notification",
-					Updates: []Update{{chid, uint64(version), data}},
+					Updates: []Update{{ChannelID: chid, Version: version, Data: data}},
 				}).Do(writePanic),
 				mckPinger.EXPECT().Send(uaid, version, data),
 			)
@@ -284,7 +292,7 @@ func TestWorkerSend(t *testing.T) {
 			gomock.InOrder(
 				mckSocket.EXPECT().WriteJSON(FlushReply{
 					Type:    "notification",
-					Updates: []Update{{chid, uint64(version), data}},
+					Updates: []Update{{ChannelID: chid, Version: version, Data: data}},
 				}),
 				mckStat.EXPECT().Increment("updates.sent"),
 				mckStat.EXPECT().Timer("client.flush", gomock.Any()),
@@ -380,8 +388,16 @@ func TestWorkerACK(t *testing.T) {
 			wws.SetUAID(uaid)
 
 			flushUpdates := []Update{
-				{"263d09f8950b11e4a1f83c15c2c622fe", 2, "I'm a little teapot"},
-				{"bac9d83a950b11e4bd713c15c2c622fe", 4, "Short and stout"},
+				{
+					ChannelID: "263d09f8950b11e4a1f83c15c2c622fe",
+					Version:   2,
+					Data:      "I'm a little teapot",
+				},
+				{
+					ChannelID: "bac9d83a950b11e4bd713c15c2c622fe",
+					Version:   4,
+					Data:      "Short and stout",
+				},
 			}
 			flushExpired := []string{"c778e94a950b11e4ba7f3c15c2c622fe"}
 
@@ -1440,8 +1456,16 @@ func TestHandshakeFlush(t *testing.T) {
 		Convey("Should flush updates after handshake", func() {
 			uaid := "b0b8afe6950c11e49aa73c15c2c622fe"
 			updates := []Update{
-				{"263d09f8950b11e4a1f83c15c2c622fe", 2, "I'm a little teapot"},
-				{"bac9d83a950b11e4bd713c15c2c622fe", 4, "Short and stout"},
+				{
+					ChannelID: "263d09f8950b11e4a1f83c15c2c622fe",
+					Version:   2,
+					Data:      "I'm a little teapot",
+				},
+				{
+					ChannelID: "bac9d83a950b11e4bd713c15c2c622fe",
+					Version:   4,
+					Data:      "Short and stout",
+				},
 			}
 			expired := []string{"c778e94a950b11e4ba7f3c15c2c622fe"}
 

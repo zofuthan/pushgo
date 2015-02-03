@@ -58,8 +58,9 @@ func (err StorageError) Error() string {
 // Update represents a notification sent on a channel.
 type Update struct {
 	ChannelID string `json:"channelID"`
-	Version   uint64 `json:"version"`
+	Version   int64  `json:"version"`
 	Data      string `json:"data"`
+	CanDrop   bool   `json:"-"`
 }
 
 // DbConf specifies generic database adapter options.

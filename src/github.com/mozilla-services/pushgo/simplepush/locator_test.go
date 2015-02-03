@@ -176,7 +176,7 @@ func TestLocatorReadyNotify(t *testing.T) {
 			return
 		}
 		ok := false
-		expected := Update{chid, uint64(version), data}
+		expected := Update{ChannelID: chid, Version: version, Data: data}
 		for _, update := range flushReply.Updates {
 			if ok = update == expected; ok {
 				break

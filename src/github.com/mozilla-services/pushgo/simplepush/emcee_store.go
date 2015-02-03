@@ -353,7 +353,7 @@ func (s *EmceeStore) storeRegister(uaid, chid string, version int64) error {
 	}
 	if version != 0 {
 		rec.State = StateLive
-		rec.Version = uint64(version)
+		rec.Version = version
 	}
 	key := joinIDs(uaid, chid)
 	if err = s.storeRec(key, rec); err != nil {
@@ -405,7 +405,7 @@ func (s *EmceeStore) storeUpdate(uaid, chid string, version int64) error {
 		if cRec.State != StateDeleted {
 			newRecord := &ChannelRecord{
 				State:       StateLive,
-				Version:     uint64(version),
+				Version:     version,
 				LastTouched: time.Now().UTC().Unix(),
 			}
 			if err = s.storeRec(key, newRecord); err != nil {
@@ -591,7 +591,7 @@ func (s *EmceeStore) FetchAll(uaid string, since time.Time) ([]Update, []string,
 		case StateLive:
 			version := channel.Version
 			if version == 0 {
-				version = uint64(time.Now().UTC().Unix())
+				version = time.Now().UTC().Unix()
 				if s.logger.ShouldLog(DEBUG) {
 					s.logger.Debug("emcee", "FetchAll Using Timestamp", LogFields{
 						"uaid": uaid,

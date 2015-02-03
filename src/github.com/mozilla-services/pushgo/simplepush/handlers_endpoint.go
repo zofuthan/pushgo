@@ -159,11 +159,11 @@ func (h *EndpointHandler) resolvePK(token string) (uaid, chid string, err error)
 	return uaid, chid, nil
 }
 
-func (h *EndpointHandler) doPropPing(uaid string, version int64, data string) (ok bool, err error) {
+func (h *EndpointHandler) doPropPing(uaid string, update *Update) (ok bool, err error) {
 	if h.pinger == nil {
 		return false, nil
 	}
-	if ok, err = h.pinger.Send(uaid, version, data); err != nil {
+	if ok, err = h.pinger.Send(uaid, update.Version, update.Data); err != nil {
 		return false, fmt.Errorf("Could not send proprietary ping: %s", err)
 	}
 	if !ok {
@@ -175,25 +175,27 @@ func (h *EndpointHandler) doPropPing(uaid string, version int64, data string) (o
 }
 
 // getUpdateParams extracts the update version and data from req.
-func (h *EndpointHandler) getUpdateParams(req *http.Request) (version int64, data string, err error) {
+func (h *EndpointHandler) getUpdateParams(req *http.Request) (update *Update, err error) {
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type",
 			"application/x-www-form-urlencoded")
 	}
+	update = new(Update)
 	svers := req.FormValue("version")
 	if svers != "" {
-		if version, err = strconv.ParseInt(svers, 10, 64); err != nil || version < 0 {
-			return 0, "", ErrBadVersion
+		update.Version, err = strconv.ParseInt(svers, 10, 64)
+		if err != nil || update.Version < 0 {
+			return nil, ErrBadVersion
 		}
 	} else {
-		version = timeNow().UTC().Unix()
+		update.Version = timeNow().UTC().Unix()
 	}
-
-	data = req.FormValue("data")
-	if len(data) > h.maxDataLen {
-		return 0, "", ErrDataTooLong
+	update.Data = req.FormValue("data")
+	if len(update.Data) > h.maxDataLen {
+		return nil, ErrDataTooLong
 	}
-	return
+	update.CanDrop, _ = strconv.ParseBool(req.FormValue("drop"))
+	return update, nil
 }
 
 // -- REST
@@ -205,7 +207,6 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 	var (
 		err        error
 		updateSent bool
-		version    int64
 		uaid, chid string
 	)
 
@@ -238,7 +239,7 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	version, data, err := h.getUpdateParams(req)
+	update, err := h.getUpdateParams(req)
 	if err != nil {
 		if err == ErrDataTooLong {
 			if logWarning {
@@ -260,7 +261,7 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 	// e.g. update/p/gcm/LSoC or something?
 	// (Note, this would allow us to use smarter FE proxies.)
 	token := mux.Vars(req)["key"]
-	if uaid, chid, err = h.resolvePK(token); err != nil {
+	if uaid, update.ChannelID, err = h.resolvePK(token); err != nil {
 		if logWarning {
 			h.logger.Warn("handlers_endpoint", "Invalid primary key for update",
 				LogFields{"error": err.Error(), "rid": requestID, "token": token})
@@ -269,12 +270,13 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 		h.metrics.Increment("updates.appserver.invalid")
 		return
 	}
+	chid = update.ChannelID
 
 	// At this point we should have a valid endpoint in the URL
 	h.metrics.Increment("updates.appserver.incoming")
 
 	// is there a Proprietary Ping for this?
-	updateSent, err = h.doPropPing(uaid, version, data)
+	updateSent, err = h.doPropPing(uaid, update)
 	if err != nil {
 		if logWarning {
 			h.logger.Warn("handlers_endpoint", "Could not send proprietary ping",
@@ -289,27 +291,29 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 
 	if h.logger.ShouldLog(INFO) {
 		h.logger.Info("handlers_endpoint", "setting version for ChannelID",
-			LogFields{"rid": requestID, "uaid": uaid, "chid": chid,
-				"version": strconv.FormatInt(version, 10)})
+			LogFields{"rid": requestID, "uaid": uaid, "chid": update.ChannelID,
+				"version": strconv.FormatInt(update.Version, 10)})
 	}
 
-	if err = h.store.Update(uaid, chid, version); err != nil {
-		if logWarning {
-			h.logger.Warn("handlers_endpoint", "Could not update channel", LogFields{
-				"rid":     requestID,
-				"uaid":    uaid,
-				"chid":    chid,
-				"version": strconv.FormatInt(version, 10),
-				"error":   err.Error()})
+	if !update.CanDrop {
+		if err = h.store.Update(uaid, update.ChannelID, update.Version); err != nil {
+			if logWarning {
+				h.logger.Warn("handlers_endpoint", "Could not update channel", LogFields{
+					"rid":     requestID,
+					"uaid":    uaid,
+					"chid":    update.ChannelID,
+					"version": strconv.FormatInt(update.Version, 10),
+					"error":   err.Error()})
+			}
+			status, _ := ErrToStatus(err)
+			h.metrics.Increment("updates.appserver.error")
+			writeJSON(resp, status, []byte(`"Could not update channel version"`))
+			return
 		}
-		status, _ := ErrToStatus(err)
-		h.metrics.Increment("updates.appserver.error")
-		writeJSON(resp, status, []byte(`"Could not update channel version"`))
-		return
 	}
 
 	cn, _ := resp.(http.CloseNotifier)
-	if !h.deliver(cn, uaid, chid, version, requestID, data) {
+	if !h.deliver(cn, uaid, update, requestID) {
 		// We've accepted the valid endpoint, stored the data for
 		// eventual pickup by the client, but failed to deliver to
 		// the client via routing.
@@ -323,8 +327,8 @@ func (h *EndpointHandler) UpdateHandler(resp http.ResponseWriter, req *http.Requ
 }
 
 // deliver routes an incoming update to the appropriate server.
-func (h *EndpointHandler) deliver(cn http.CloseNotifier, uaid, chid string,
-	version int64, requestID string, data string) (delivered bool) {
+func (h *EndpointHandler) deliver(cn http.CloseNotifier, uaid string,
+	update *Update, requestID string) (delivered bool) {
 
 	worker, workerConnected := h.app.GetWorker(uaid)
 	// Always route to other servers first, in case we're holding open a stale
@@ -337,8 +341,8 @@ func (h *EndpointHandler) deliver(cn http.CloseNotifier, uaid, chid string,
 			cancelSignal = cn.CloseNotify()
 		}
 		// Route the update.
-		delivered, _ = h.router.Route(cancelSignal, uaid, chid, version,
-			timeNow().UTC(), requestID, data)
+		delivered, _ = h.router.Route(cancelSignal, uaid, update.ChannelID,
+			update.Version, timeNow().UTC(), requestID, update.Data)
 		if delivered {
 			return true
 		}
@@ -349,7 +353,7 @@ func (h *EndpointHandler) deliver(cn http.CloseNotifier, uaid, chid string,
 		return
 	}
 	// Try local delivery if routing failed.
-	err := worker.Send(chid, version, data)
+	err := worker.Send(update.ChannelID, update.Version, update.Data)
 	if err != nil {
 		h.metrics.Increment("updates.appserver.rejected")
 		return false

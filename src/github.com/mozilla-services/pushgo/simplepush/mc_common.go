@@ -37,7 +37,7 @@ var (
 // ChannelRecord represents a channel record persisted to memcached.
 type ChannelRecord struct {
 	State       ChannelState
-	Version     uint64
+	Version     int64
 	LastTouched int64
 }
 

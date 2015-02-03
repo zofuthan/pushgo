@@ -198,19 +198,19 @@ func TestEndpointContentType(t *testing.T) {
 			vals.Set("version", "123")
 			vals.Set("data", randomText(eh.maxDataLen))
 
-			version, data, err := eh.getUpdateParams(&http.Request{
+			update, err := eh.getUpdateParams(&http.Request{
 				Method: "PUT",
 				Header: http.Header{"Content-Type": {""}},
 				URL:    &url.URL{Path: "/update/123"},
 				Body:   formReader(vals),
 			})
 			So(err, ShouldBeNil)
-			So(version, ShouldEqual, 123)
-			So(len(data), ShouldEqual, eh.maxDataLen)
+			So(update.Version, ShouldEqual, 123)
+			So(len(update.Data), ShouldEqual, eh.maxDataLen)
 		})
 
 		Convey("Should use query params if the body is omitted", func() {
-			version, data, err := eh.getUpdateParams(&http.Request{
+			update, err := eh.getUpdateParams(&http.Request{
 				Method: "PUT",
 				Header: http.Header{},
 				URL: &url.URL{
@@ -219,8 +219,8 @@ func TestEndpointContentType(t *testing.T) {
 				},
 			})
 			So(err, ShouldBeNil)
-			So(version, ShouldEqual, 7)
-			So(data, ShouldEqual, "Hello, world!")
+			So(update.Version, ShouldEqual, 7)
+			So(update.Data, ShouldEqual, "Hello, world!")
 		})
 
 		Convey("Should accept multipart forms", func() {
@@ -231,7 +231,7 @@ func TestEndpointContentType(t *testing.T) {
 			mw.WriteField("data", "Hello, world!")
 			mw.Close()
 
-			version, data, err := eh.getUpdateParams(&http.Request{
+			update, err := eh.getUpdateParams(&http.Request{
 				Method: "PUT",
 				Header: http.Header{"Content-Type": {
 					"multipart/form-data; boundary=db74d732"}},
@@ -239,8 +239,8 @@ func TestEndpointContentType(t *testing.T) {
 				Body: ioutil.NopCloser(buf),
 			})
 			So(err, ShouldBeNil)
-			So(version, ShouldEqual, 123)
-			So(data, ShouldEqual, "Hello, world!")
+			So(update.Version, ShouldEqual, 123)
+			So(update.Data, ShouldEqual, "Hello, world!")
 		})
 	})
 }
@@ -497,14 +497,18 @@ func TestEndpointDelivery(t *testing.T) {
 
 			Convey("Should route updates if the device is not connected", func() {
 				uaid := "f7e9fc483f7344c398701b6fa0e85e4f"
-				chid := "737b7a0d25674be4bb184f015fce02cf"
+				update := &Update{
+					ChannelID: "737b7a0d25674be4bb184f015fce02cf",
+					Version:   3,
+				}
+
 				gomock.InOrder(
 					mckStat.EXPECT().Increment("updates.routed.outgoing"),
-					mckRouter.EXPECT().Route(nil, uaid, chid, int64(3), timeNow().UTC(),
-						"", "").Return(true, nil),
+					mckRouter.EXPECT().Route(nil, uaid, update.ChannelID, update.Version,
+						timeNow().UTC(), "", update.Data).Return(true, nil),
 				)
-				ok := eh.deliver(nil, uaid, chid, 3, "", "")
-				So(ok, ShouldBeTrue)
+				delivered := eh.deliver(nil, uaid, update, "")
+				So(delivered, ShouldBeTrue)
 			})
 
 			// A routing failure still stores the alert for potential
@@ -536,16 +540,19 @@ func TestEndpointDelivery(t *testing.T) {
 
 			Convey("Should return a 404 if local delivery fails", func() {
 				uaid := "9e98d6415d8e4fd099ab1bad7178f750"
-				chid := "0eecf572e99f4d508666d8da6c0b15a9"
+				update := &Update{
+					ChannelID: "0eecf572e99f4d508666d8da6c0b15a9",
+					Version:   3,
+				}
 				app.AddWorker(uaid, mckWorker)
 
 				gomock.InOrder(
-					mckWorker.EXPECT().Send(chid, int64(3), "").Return(
+					mckWorker.EXPECT().Send(update.ChannelID, update.Version, "").Return(
 						errors.New("client gone")),
 					mckStat.EXPECT().Increment("updates.appserver.rejected"),
 				)
-				ok := eh.deliver(nil, uaid, chid, int64(3), "", "")
-				So(ok, ShouldBeFalse)
+				delivered := eh.deliver(nil, uaid, update, "")
+				So(delivered, ShouldBeFalse)
 			})
 
 			Convey("Should return an error if storage is unavailable", func() {
@@ -579,22 +586,24 @@ func TestEndpointDelivery(t *testing.T) {
 			app.SetEndpointHandler(eh)
 
 			uaid := "6952a68ee0e7444ebc54f935c4444b13"
+			update := &Update{
+				ChannelID: "b7ede546585f4cc9b95e9340e3406951",
+				Version:   1,
+				Data:      "Happy, happy, joy, joy!",
+			}
 			app.AddWorker(uaid, mckWorker)
-
-			chid := "b7ede546585f4cc9b95e9340e3406951"
-			version := int64(1)
-			data := "Happy, happy, joy, joy!"
 
 			gomock.InOrder(
 				mckStat.EXPECT().Increment("updates.routed.outgoing"),
-				mckRouter.EXPECT().Route(nil, uaid, chid, version,
-					gomock.Any(), "", data).Return(false, nil),
-				mckWorker.EXPECT().Send(chid, version, data).Return(nil),
+				mckRouter.EXPECT().Route(nil, uaid, update.ChannelID, update.Version,
+					gomock.Any(), "", update.Data).Return(false, nil),
+				mckWorker.EXPECT().Send(update.ChannelID,
+					update.Version, update.Data).Return(nil),
 				mckStat.EXPECT().Increment("updates.appserver.received"),
 			)
 
-			ok := eh.deliver(nil, uaid, chid, version, "", data)
-			So(ok, ShouldBeTrue)
+			delivered := eh.deliver(nil, uaid, update, "")
+			So(delivered, ShouldBeTrue)
 		})
 	})
 }

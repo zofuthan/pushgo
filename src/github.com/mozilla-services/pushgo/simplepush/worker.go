@@ -792,7 +792,7 @@ func (w *WorkerWS) Send(chid string, version int64, data string) (err error) {
 	}
 	// hand craft a notification update to the client.
 	// TODO: allow bulk updates.
-	updates := []Update{{chid, uint64(version), data}}
+	updates := []Update{{ChannelID: chid, Version: version, Data: data}}
 	w.WriteJSON(FlushReply{"notification", updates, nil})
 	w.metrics.Increment("updates.sent")
 	return nil
