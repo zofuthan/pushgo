@@ -7,7 +7,7 @@
 #  elif [ -e .hg ]; then;
 #    hg log |head -1 |sed "s/changeset:\s*//"
 #
-github.com/kitcambridge/net/websocket 07fac0dbb830243953cba40b25b953abe22353f1
+github.com/kitcambridge/net/websocket 11e0cd356041a1f0abbd86db682115097201c26b
 github.com/bbangert/toml a2063ce2e5cf10e54ab24075840593d60f59b611
 github.com/bradfitz/gomemcache/memcache 4faecadd4f695d18a912ba110120fcfd460aca98
 github.com/cactus/go-statsd-client/statsd f934df28073069859c4b8a26e837e0fc55e79d37
