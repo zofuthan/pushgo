@@ -7,7 +7,7 @@ package simplepush
 import (
 	"time"
 
-	"golang.org/x/net/websocket"
+	"github.com/kitcambridge/net/websocket"
 )
 
 // Socket describes a WebSocket connection. The default implementation is the

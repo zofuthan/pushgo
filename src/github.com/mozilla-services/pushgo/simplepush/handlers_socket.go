@@ -13,12 +13,16 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"golang.org/x/net/websocket"
+	"github.com/kitcambridge/net/websocket"
 )
 
 func NewSocketHandler() (h *SocketHandler) {
 	h = &SocketHandler{mux: mux.NewRouter()}
 	h.mux.Handle("/", websocket.Server{
+		Config: websocket.Config{
+			Time:         timeNow,
+			CloseTimeout: 5 * time.Second,
+		},
 		Handler:   h.PushSocketHandler,
 		Handshake: h.checkOrigin,
 	})

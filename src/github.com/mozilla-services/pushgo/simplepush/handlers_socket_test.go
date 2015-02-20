@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/kitcambridge/net/websocket"
 	"github.com/rafrombrc/gomock/gomock"
-	"golang.org/x/net/websocket"
 )
 
 // listenerConfig implements ListenerConfig.

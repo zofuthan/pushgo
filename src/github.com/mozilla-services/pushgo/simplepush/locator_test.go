@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kitcambridge/net/websocket"
 	"github.com/rafrombrc/gomock/gomock"
-	"golang.org/x/net/websocket"
 )
 
 // newMockReadyNotifier wraps l in a mockReadyNotifier.

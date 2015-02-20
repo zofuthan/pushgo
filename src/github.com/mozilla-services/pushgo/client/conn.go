@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	ws "golang.org/x/net/websocket"
+	ws "github.com/kitcambridge/net/websocket"
 
 	"github.com/mozilla-services/pushgo/id"
 )
